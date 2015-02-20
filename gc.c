@@ -481,6 +481,7 @@ typedef struct rb_objspace {
 
     rb_event_flag_t hook_events;
     size_t total_allocated_objects;
+    double gc_total_time;
 
     rb_heap_t eden_heap;
     rb_heap_t tomb_heap; /* heap for zombies and ghosts */
@@ -6399,6 +6400,7 @@ enum gc_stat_sym {
     gc_stat_sym_total_freed_pages,
     gc_stat_sym_total_allocated_objects,
     gc_stat_sym_total_freed_objects,
+    gc_stat_sym_total_time,
     gc_stat_sym_malloc_increase_bytes,
     gc_stat_sym_malloc_increase_bytes_limit,
 #if USE_RGENGC
@@ -6476,6 +6478,7 @@ setup_gc_stat_symbols(void)
 	S(total_freed_pages);
 	S(total_allocated_objects);
 	S(total_freed_objects);
+	S(total_time);
 	S(malloc_increase_bytes);
 	S(malloc_increase_bytes_limit);
 #if USE_RGENGC
@@ -6650,6 +6653,7 @@ gc_stat_internal(VALUE hash_or_sym)
     SET(total_freed_pages, objspace->profile.total_freed_pages);
     SET(total_allocated_objects, objspace->total_allocated_objects);
     SET(total_freed_objects, objspace->profile.total_freed_objects);
+    SET(total_time, NUM2SIZET(DBL2NUM(objspace->gc_total_time * 1000000)));
     SET(malloc_increase_bytes, malloc_increase);
     SET(malloc_increase_bytes_limit, malloc_limit);
 #if USE_RGENGC
@@ -6725,6 +6729,7 @@ gc_stat_internal(VALUE hash_or_sym)
  *          :total_freed_pages=>0,
  *          :total_allocated_objects=>7796,
  *          :total_freed_objects=>83,
+ *          :total_time=>1978,
  *          :malloc_increase_bytes=>2389312,
  *          :malloc_increase_bytes_limit=>16777216,
  *          :minor_gc_count=>0,
@@ -8103,7 +8108,9 @@ gc_prof_timer_stop(rb_objspace_t *objspace)
 {
     if (gc_prof_enabled(objspace)) {
 	gc_profile_record *record = gc_prof_record(objspace);
-	record->gc_time = elapsed_time_from(record->gc_invoke_time);
+	double elapsed_time = elapsed_time_from(record->gc_invoke_time);
+	objspace->gc_total_time += elapsed_time;
+	record->gc_time = elapsed_time;
 	record->gc_invoke_time -= objspace->profile.invoke_time;
     }
 }
@@ -8164,6 +8171,7 @@ gc_prof_sweep_timer_stop(rb_objspace_t *objspace)
 	if (record->gc_time > 0) {
 	    sweep_time = elapsed_time_from(objspace->profile.gc_sweep_start_time);
 	    /* need to accumulate GC time for lazy sweep after gc() */
+	    objspace->gc_total_time += sweep_time;
 	    record->gc_time += sweep_time;
 	}
 	else if (GC_PROFILE_MORE_DETAIL) {

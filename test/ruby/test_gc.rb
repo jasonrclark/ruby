@@ -277,6 +277,38 @@ class TestGc < Test::Unit::TestCase
     GC::Profiler.disable
   end
 
+  def test_gc_stat_total_time
+    GC::Profiler.enable
+    GC::Profiler.clear
+
+    GC.start
+    assert_operator(GC.stat[:total_time], :>=, 0)
+  ensure
+    GC::Profiler.disable
+  end
+
+  def test_gc_stat_total_time_when_disabled
+    GC::Profiler.disable
+    original = GC.stat[:total_time]
+
+    GC.start
+    assert_operator(GC.stat[:total_time], :==, original)
+  ensure
+    GC::Profiler.disable
+  end
+
+  def test_gc_stat_total_time_is_monotonic
+    GC::Profiler.enable
+    GC::Profiler.clear
+
+    GC.start
+    GC::Profiler.clear
+
+    assert_operator(GC.stat[:total_time], :>=, 0)
+  ensure
+    GC::Profiler.disable
+  end
+
   def test_finalizing_main_thread
     assert_in_out_err(%w[--disable-gems], <<-EOS, ["\"finalize\""], [], "[ruby-dev:46647]")
       ObjectSpace.define_finalizer(Thread.main) { p 'finalize' }
